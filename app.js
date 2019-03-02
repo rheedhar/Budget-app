@@ -3,6 +3,19 @@ var budgetController = (function (){
 		this.id = id;
 		this.description = description;
 		this.value = value;
+		this.percentage = -1;
+	};
+
+	Expense.prototype.calcPercentage = function(totalIncome) {
+		if(totalIncome > 0){
+			this.percentage = Math.round((this.value / totalIncome) * 100);
+		} else {
+			this.percentage = -1;
+		}
+	};
+
+	Expense.prototype.getPercentage = function() {
+		return this.percentage;
 	};
  
 	var Income = function(id, description, value){
@@ -63,6 +76,17 @@ var budgetController = (function (){
 		},
 
 		deleteItem: function(type, id) {
+			var ids, index;
+
+			 ids = data.allItems[type].map(function(current) {
+				return current.id;
+			});
+
+			index = ids.indexOf(id);
+
+			if(index !== -1){
+				data.allItems[type].splice(index, 1);
+			}
 
 		},
 
@@ -81,6 +105,22 @@ var budgetController = (function (){
 				data.percentage = -1;
 			}
 			
+		},
+
+		calculatePercentages: function() {
+			data.allItems.exp.forEach(function(cur){
+				cur.calcPercentage(data.totals.inc);
+			});
+
+		},
+
+		getPercentages: function() {
+			var allPerc = data.allItems.exp.map(function(cur) {
+				return cur.getPercentage();
+			});
+
+			return allPerc;
+
 		},
 
 		getBudget: function() {
@@ -114,7 +154,8 @@ var UIController = (function (){
 		incomeLabel: '.budget__income--value',
 		expensesLabel: '.budget__expenses--value',
 		percentageLabel: '.budget__expenses--percentage',
-		container: '.container'
+		container: '.container',
+		expensesPercLabel: '.item__percentage'
 	};
 	return {
 		getInput: function() {
@@ -142,7 +183,7 @@ var UIController = (function (){
 
 
 			//replace placeholder text with some actual data
-			newHtml = html.replace('%id', obj.id);
+			newHtml = html.replace('%id%', obj.id);
 			newHtml = newHtml.replace('%description%', obj.description);
 			newHtml = newHtml.replace('%value%', obj.value);
 
@@ -152,6 +193,11 @@ var UIController = (function (){
 
 
 
+		},
+
+		deleteListItem: function(selectorID) {
+			var el = document.getElementById(selectorID);
+			el.parentNode.removeChild(el);
 		},
 
 		clearFields: function() {
@@ -178,6 +224,27 @@ var UIController = (function (){
 			} else {
 				document.querySelector(DOMstrings.percentageLabel).textContent = '---';
 			}
+
+		},
+
+		displayPercentages: function(percentages) {
+
+			var fields = document.querySelectorAll(DOMstrings.expensesPercLabel);
+
+			var nodeListForEach = function(list, callback) {
+				for (var i = 0; i < list.length; i++) {
+					callback(list[i], i);
+				}
+			};
+
+			nodeListForEach(fields, function(current, index) {
+				if(percentages[index] > 0){
+					current.textContent = percentages[index] + '%';
+				} else {
+					current.textContent = '----';
+				}
+
+			});
 
 		},
 
@@ -210,6 +277,18 @@ var controller = (function(budgetCtrl, UICtrl) {
 		document.querySelector(DOM.container).addEventListener('click', ctrlDeleteItem);
 
 	};
+
+
+	var updatePercentages = function() {
+		//1. Calculate percentages
+		budgetCtrl.calculatePercentages();
+		//2. Read percentages from budget controller
+		var percentages = budgetCtrl.getPercentages();
+		//3.update the UI with new percentages
+		UICtrl.displayPercentages(percentages);
+		
+	};
+
 
 	var updateBudget = function() {
 
@@ -246,6 +325,9 @@ var controller = (function(budgetCtrl, UICtrl) {
 			//5. Calculate and updatebudget
 			updateBudget();
 
+			//6. Calculate and update the percentages
+			updatePercentages();
+
 		}
 
 		
@@ -259,13 +341,21 @@ var controller = (function(budgetCtrl, UICtrl) {
 		if (itemId) {
 			splitId = itemId.split('-');
 			type = splitId[0];
-			id = splitId[1];
+			id = parseInt(splitId[1]);
 
 			//1. delete item from ds
 
+			budgetCtrl.deleteItem(type, id);
+
 			//2. delete item from ui
+			UICtrl.deleteListItem(itemId);
 
 			//3.update nd show the new button
+
+			updateBudget();
+
+			//4. Calculate and update the percentages
+			updatePercentages();
 		}
 
 	};
@@ -283,7 +373,6 @@ var controller = (function(budgetCtrl, UICtrl) {
 		}
 	};
 })(budgetController, UIController);
-
 
 controller.init();
 
